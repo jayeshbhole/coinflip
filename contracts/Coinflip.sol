@@ -10,14 +10,16 @@ contract CoinFlip {
     }
 
     // Mapping of users balances
-    mapping(address => uint256) balances;
-    // Array of Ongoing bets
-    Bet[] ongoingBets;
-    // Array of Completed bets
-    Bet[] completedBets;
+    mapping(address => uint256) private balances;
+    mapping(address => bool) private existingUser;
 
-    // Mapping of isOngoingBet flag. user => isOngoingBet
-    mapping(address => bool) isOngoingBets;
+    // Array of Ongoing bets
+    Bet[] public ongoingBets;
+    // Array of Completed bets
+    Bet[] public completedBets;
+
+    // Mapping of isUserBetting flag. user => isUserBetting
+    mapping(address => bool) isUserBetting;
 
     // Bet placed event
     event BetPlaced(uint256 id, address player, uint256 amount, uint256 bet);
@@ -43,33 +45,35 @@ contract CoinFlip {
         }
     }
 
+    function balanceOf(address _user) public view returns (uint256) {
+        if (existingUser[_user] == false) return 100;
+        return balances[_user];
+    }
+
     // Place bet function. accepts amount = integer and bet = 0 or 1 representing heads or tails
     function placeBet(uint256 _amount, uint256 _bet)
         public
         payable
         returns (uint256 betId)
     {
-        // Check if bet is 0 or 1
         require(_bet == 0 || _bet == 1, "Bet must be 0 or 1");
-
-        // Check if bet is valid
         require(_amount > 0, "Bet must be greater than 0");
 
-        // Check if user has enough balance
-        require(
-            balances[msg.sender] >= _amount,
-            "You don't have enough balance"
-        );
+        if (existingUser[msg.sender] == false) {
+            existingUser[msg.sender] = true;
+            balances[msg.sender] = 100;
+        }
+        require(balances[msg.sender] >= _amount, "Not enough balance");
 
         // Check if user has already placed a bet
-        require(!isOngoingBets[msg.sender], "You have already placed a bet");
+        require(!isUserBetting[msg.sender], "You have already placed a bet");
 
         // Create a new Bet and
         // Add new bet to ongoing bets
         ongoingBets.push(Bet(completedBets.length, msg.sender, _amount, _bet));
 
-        // Set isOngoingBet flag to true
-        isOngoingBets[msg.sender] = true;
+        // Set isUserBetting flag to true
+        isUserBetting[msg.sender] = true;
 
         // Subtract bet amount from user balance
         balances[msg.sender] -= _amount;
@@ -83,31 +87,41 @@ contract CoinFlip {
 
     // calculate rewards for ongoing bets function
     function rewardBets() public {
+        require(ongoingBets.length > 0, "No ongoing bets");
+
         // Use VRF to determine game outcome
         uint8 outcome = uint8(uint256(vrf())) % 2;
 
         // Iterate through ongoing bets
         for (uint256 i = 0; i < ongoingBets.length; i++) {
+            Bet memory currentBet = ongoingBets[i];
+
             // If bet and outcome match
-            if (ongoingBets[i].bet == outcome) {
+            if (currentBet.bet == outcome) {
                 // Add bet amount to user balance
-                balances[ongoingBets[i].player] += 2 * ongoingBets[i].amount;
+                balances[currentBet.player] += 2 * currentBet.amount;
             }
 
+            // set isUserBetting flag to false for player
+            isUserBetting[currentBet.player] = false;
+
             // Add bet to completed bets
-            completedBets.push(ongoingBets[i]);
+            completedBets.push(currentBet);
 
             // emit bet result event
             emit BetResult(
-                ongoingBets[i].id,
-                ongoingBets[i].player,
-                2 * ongoingBets[i].amount,
-                ongoingBets[i].bet,
+                currentBet.id,
+                currentBet.player,
+                2 * currentBet.amount,
+                currentBet.bet,
                 outcome
             );
 
             // Add bet to completed bets
-            completedBets.push(ongoingBets[i]);
+            completedBets.push(currentBet);
         }
+
+        // Clear ongoing bets array
+        delete ongoingBets;
     }
 }
