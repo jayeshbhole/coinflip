@@ -53,7 +53,6 @@ contract CoinFlip {
     // Place bet function. accepts amount = integer and bet = 0 or 1 representing heads or tails
     function placeBet(uint256 _amount, uint256 _bet)
         public
-        payable
         returns (uint256 betId)
     {
         require(_bet == 0 || _bet == 1, "Bet must be 0 or 1");
@@ -100,6 +99,23 @@ contract CoinFlip {
             if (currentBet.bet == outcome) {
                 // Add bet amount to user balance
                 balances[currentBet.player] += 2 * currentBet.amount;
+                // emit bet result event
+                emit BetResult(
+                    currentBet.id,
+                    currentBet.player,
+                    2 * currentBet.amount,
+                    currentBet.bet,
+                    outcome
+                );
+            } else {
+                // emit bet result event
+                emit BetResult(
+                    currentBet.id,
+                    currentBet.player,
+                    0,
+                    currentBet.bet,
+                    outcome
+                );
             }
 
             // set isUserBetting flag to false for player
@@ -107,15 +123,6 @@ contract CoinFlip {
 
             // Add bet to completed bets
             completedBets.push(currentBet);
-
-            // emit bet result event
-            emit BetResult(
-                currentBet.id,
-                currentBet.player,
-                2 * currentBet.amount,
-                currentBet.bet,
-                outcome
-            );
 
             // Add bet to completed bets
             completedBets.push(currentBet);
